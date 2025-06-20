@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Minesweeper: The Oracle Grid</title>
+    <style>
+        /* Import a mystic, monospaced font for the artifact feel */
+        @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap');
+        
+        /* Basic reset and body styling */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier Prime', monospace;
+            /* Deep, cosmic gradient background */
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #16213e 35%, #0f0f23 100%);
+            color: #d4af37; /* Golden-bronze text for a mystic vibe */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-x: hidden; /* Prevent horizontal scrolling on small devices */
+            transition: box-shadow 0.1s ease-out; /* For simulated haptics */
+        }
+        
+        /* Main container for centering content */
+        .container {
+            text-align: center;
+            max-width: 100%; /* Ensure responsiveness */
+        }
+        
+        /* Title styling */
+        h1 {
+            font-size: clamp(1.8rem, 5vw, 2.8rem); /* Responsive font size */
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(212, 175, 55, 0.7);
+            letter-spacing: 3px;
+            white-space: nowrap; /* Prevent breaking on small screens */
+        }
+        
+        /* Subtitle styling */
+        .subtitle {
+            font-size: clamp(0.8rem, 2.5vw, 1.1rem); /* Responsive font size */
+            color: #9d8df1; /* Mystic purple-blue */
+            margin-bottom: 30px;
+            font-style: italic;
+            opacity: 0.8;
+        }
+        
+        /* Game info bar styling */
+        .game-info {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            gap: clamp(15px, 4vw, 30px); /* Responsive gap */
+            flex-wrap: wrap;
+            font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+        }
+        
+        .info-item {
+            color: #d4af37;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+        }
+        
+        /* Grid container for aesthetic padding and shadow */
+        .grid-container {
+            display: inline-block;
+            background: rgba(212, 175, 55, 0.1);
+            padding: clamp(15px, 4vw, 20px); /* Responsive padding */
+            border-radius: 15px;
+            box-shadow: 
+                0 0 30px rgba(212, 175, 55, 0.3),
+                inset 0 0 30px rgba(0, 0, 0, 0.5);
+            margin-bottom: 30px;
+            max-width: 95vw; /* Ensure grid doesn't overflow on small screens */
+        }
+        
+        /* Grid layout */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 2px; /* Small gap between cells */
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 10px;
+            /* Max width to control cell sizing */
+            max-width: min(calc(10 * 42px + 9 * 2px + 20px), 100%); /* 10 cells * (cell_size + border) + gaps + padding */
+            margin: 0 auto; /* Center the grid */
+        }
+        
+        /* Individual cell styling */
+        .cell {
+            width: clamp(30px, 9vw, 40px); /* Responsive width */
+            height: clamp(30px, 9vw, 40px); /* Responsive height, keeping aspect ratio */
+            background: linear-gradient(145deg, #2a2a4a, #1a1a3a); /* Dark, metallic gradient */
+            border: 2px solid rgba(212, 175, 55, 0.3); /* Subtle golden border */
+            border-radius: 6px; /* Rounded corners */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: clamp(1rem, 3.5vw, 1.2rem); /* Responsive font size for cell content */
+            transition: all 0.2s ease, opacity 0.5s ease; /* Faster transitions for responsiveness */
+            user-select: none; /* Prevent text selection */
+            -webkit-user-select: none; /* For WebKit browsers */
+            -moz-user-select: none; /* For Firefox */
+            -ms-user-select: none; /* For Internet Explorer/Edge */
+            position: relative;
+            overflow: hidden;
+            touch-action: manipulation; /* Prevent default touch behaviors like double-tap zoom */
+        }
+        
+        /* Shimmer effect for unrevealed cells on hover */
+        .cell::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .cell:hover::before {
+            left: 100%;
+        }
+        
+        /* Cell hover effect */
+        .cell:hover {
+            border-color: rgba(212, 175, 55, 0.8);
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+            transform: translateY(-2px);
+        }
+
+        /* Long press visual feedback */
+        .cell.long-pressing {
+            background: linear-gradient(145deg, #3a3a5a, #2a2a4a); /* Slightly darker */
+            border-color: rgba(157, 141, 241, 0.8); /* More prominent purple border */
+            transform: scale(0.95); /* Subtle scale down */
+        }
+        
+        /* Revealed cell styling */
+        .cell.revealed {
+            background: linear-gradient(145deg, #3a3a5a, #2a2a4a); /* Lighter dark gradient */
+            border-color: rgba(157, 141, 241, 0.6); /* Mystic purple border */
+            box-shadow: inset 0 0 10px rgba(157, 141, 241, 0.3); /* Inner glow */
+            cursor: default;
+            animation: cellRevealEffect 0.3s ease-out forwards; /* Apply reveal animation */
+        }
+        
+        /* Animation for cell content appearing on reveal */
+        @keyframes cellRevealEffect {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* Prevent hover effects on revealed cells */
+        .cell.revealed:hover {
+            transform: none;
+            box-shadow: inset 0 0 10px rgba(157, 141, 241, 0.3); /* Keep inner glow */
+        }
+        
+        /* Mine cell styling */
+        .cell.mine {
+            background: radial-gradient(circle, #8b0000 0%, #4a0000 100%); /* Fiery red gradient */
+            animation: mineReveal 0.5s ease-out; /* Pop animation */
+        }
+        
+        /* Flagged cell styling */
+        .cell.flagged {
+            background: linear-gradient(145deg, #4a4a2a, #3a3a1a); /* Earthy, muted gold */
+            border-color: rgba(212, 175, 55, 0.8);
+            animation: flagPop 0.2s ease-out; /* Flag pop animation */
+        }
+
+        /* Animation for flag appearing */
+        @keyframes flagPop {
+            0% { transform: scale(0.5); opacity: 0; }
+            80% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); }
+        }
+        
+        /* Number coloring for revealed cells */
+        .number-1 { color: #00bfff; text-shadow: 0 0 10px rgba(0, 191, 255, 0.7); }
+        .number-2 { color: #32cd32; text-shadow: 0 0 10px rgba(50, 205, 50, 0.7); }
+        .number-3 { color: #ff6347; text-shadow: 0 0 10px rgba(255, 99, 71, 0.7); }
+        .number-4 { color: #9370db; text-shadow: 0 0 10px rgba(147, 112, 219, 0.7); }
+        .number-5 { color: #ff1493; text-shadow: 0 0 10px rgba(255, 20, 147, 0.7); }
+        .number-6 { color: #ffa500; text-shadow: 0 0 10px rgba(255, 165, 0, 0.7); }
+        .number-7 { color: #ff69b4; text-shadow: 0 0 10px rgba(255, 105, 180, 0.7); }
+        .number-8 { color: #dc143c; text-shadow: 0 0 10px rgba(220, 20, 60, 0.7); }
+        
+        /* Reset button styling */
+        .reset-btn {
+            background: linear-gradient(145deg, #d4af37, #b8941f); /* Golden gradient */
+            color: #1a1a2e; /* Dark text */
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-family: 'Courier Prime', monospace;
+            font-size: clamp(1rem, 3vw, 1.1rem); /* Responsive font size */
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+            user-select: none; /* Prevent text selection on button */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+        
+        .reset-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5);
+        }
+        
+        /* Game message styling (win/loss) */
+        .message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(26, 26, 46, 0.95); /* Semi-transparent dark background */
+            padding: clamp(20px, 5vw, 30px); /* Responsive padding */
+            border-radius: 15px;
+            border: 2px solid #d4af37;
+            box-shadow: 0 0 50px rgba(212, 175, 55, 0.5);
+            font-size: clamp(1.2rem, 4vw, 1.5rem); /* Responsive font size */
+            text-align: center;
+            z-index: 1000;
+            opacity: 0;
+            animation: messageAppear 0.5s ease-out forwards; /* Appear animation */
+        }
+        
+        .message.victory {
+            color: #32cd32; /* Green for victory */
+            text-shadow: 0 0 20px rgba(50, 205, 50, 0.7);
+        }
+        
+        .message.defeat {
+            color: #ff6347; /* Red for defeat */
+            text-shadow: 0 0 20px rgba(255, 99, 71, 0.7);
+        }
+        
+        /* Keyframe animations */
+        @keyframes messageAppear {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+        
+        @keyframes mineReveal {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
+        /* Screen flash effect for mine trigger (simulated haptic) */
+        .flash-effect {
+            animation: screenFlash 0.5s ease-out;
+        }
+        
+        @keyframes screenFlash {
+            0% { box-shadow: inset 0 0 0 rgba(255, 0, 0, 0); }
+            50% { box-shadow: inset 0 0 100px rgba(255, 0, 0, 0.3); }
+            100% { box-shadow: inset 0 0 0 rgba(255, 0, 0, 0); }
+        }
+
+        /* Simulated 'jolt' for body on interaction, for tactile feel */
+        .jolt-effect {
+            animation: jolt 0.1s ease-out;
+        }
+
+        @keyframes jolt {
+            0% { transform: scale(1); }
+            50% { transform: scale(0.99); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ THE ORACLE GRID ⚡</h1>
+        <p class="subtitle">A Ritual of Intuition and Chance</p>
+        
+        <div class="game-info">
+            <div class="info-item">
+                <span>Mines: </span>
+                <span id="mine-count">10</span>
+            </div>
+            <div class="info-item">
+                <span>Time: </span>
+                <span id="timer">00:00</span>
+            </div>
+            <div class="info-item">
+                <span>Flags: </span>
+                <span id="flag-count">0</span>
+            </div>
+        </div>
+        
+        <div class="grid-container">
+            <div class="grid" id="game-grid"></div>
+        </div>
+        
+        <button class="reset-btn" onclick="resetGame()">Reset The Oracle</button>
+    </div>
+
+    <script>
+        // Global game state variables
+        let grid = [];              // 2D array representing the game grid
+        let gameState = 'playing';  // 'playing', 'won', 'lost'
+        let firstClick = true;      // Track if this is the first click
+        let startTime = null;       // Game start timestamp
+        let timerInterval = null;   // Timer update interval
+        let flagCount = 0;          // Number of flags placed
+        let revealedCount = 0;      // Number of revealed cells
+        let longPressTimer = null;  // Timer for long press detection
+        const LONG_PRESS_THRESHOLD = 700; // milliseconds for long press
+
+        // Web Audio API context for generating tones
+        let audioContext;
+
+        // Game constants
+        const GRID_SIZE = 10;
+        const MINE_COUNT = 10;
+        
+        /**
+         * Initializes the Web Audio API context.
+         * Must be called on a user gesture to bypass browser autoplay policies.
+         */
+        function initializeAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        /**
+         * Plays a synthesized tone using Web Audio API.
+         * @param {number} frequency - The frequency of the tone in Hz.
+         * @param {number} duration - The duration of the tone in seconds.
+         * @param {string} type - The waveform type ('sine', 'square', 'sawtooth', 'triangle').
+         */
+        function playTone(frequency, duration, type = 'sine') {
+            if (!audioContext) {
+                console.warn("AudioContext not initialized. Call initializeAudioContext() on user gesture.");
+                return;
+            }
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // Start at 50% volume
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration); // Fade out
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        /**
+         * Triggers a subtle visual jolt effect on the body to simulate haptic feedback.
+         */
+        function triggerJoltEffect() {
+            const body = document.body;
+            body.classList.remove('jolt-effect'); // Remove to re-trigger animation if already present
+            void body.offsetWidth; // Trigger reflow
+            body.classList.add('jolt-effect');
+            setTimeout(() => {
+                body.classList.remove('jolt-effect');
+            }, 100); // Duration of the animation
+        }
+
+        /**
+         * Initialize the game grid with empty cells
+         * Creates a 10x10 grid where each cell contains game state data
+         */
+        function initializeGrid() {
+            grid = [];
+            for (let row = 0; row < GRID_SIZE; row++) {
+                grid[row] = [];
+                for (let col = 0; col < GRID_SIZE; col++) {
+                    grid[row][col] = {
+                        isMine: false,
+                        isRevealed: false,
+                        isFlagged: false,
+                        adjacentMines: 0
+                    };
+                }
+            }
+        }
+        
+        /**
+         * Randomly place mines across the grid
+         * Ensures exactly MINE_COUNT mines are placed in unique positions
+         */
+        function placeMines() {
+            let minesPlaced = 0;
+            while (minesPlaced < MINE_COUNT) {
+                const row = Math.floor(Math.random() * GRID_SIZE);
+                const col = Math.floor(Math.random() * GRID_SIZE);
+                
+                // Only place mine if cell doesn't already have one
+                if (!grid[row][col].isMine) {
+                    grid[row][col].isMine = true;
+                    minesPlaced++;
+                }
+            }
+        }
+        
+        /**
+         * Calculate the number of adjacent mines for each non-mine cell
+         * This determines the numbers that appear when cells are revealed
+         */
+        function calculateAdjacentMines() {
+            for (let row = 0; row < GRID_SIZE; row++) {
+                for (let col = 0; col < GRID_SIZE; col++) {
+                    if (!grid[row][col].isMine) {
+                        let count = 0;
+                        // Check all 8 adjacent cells
+                        for (let i = -1; i <= 1; i++) {
+                            for (let j = -1; j <= 1; j++) {
+                                const newRow = row + i;
+                                const newCol = col + j;
+                                
+                                // Skip center cell and check bounds
+                                if (i === 0 && j === 0) continue;
+                                if (newRow >= 0 && newRow < GRID_SIZE && 
+                                    newCol >= 0 && newCol < GRID_SIZE) {
+                                    if (grid[newRow][newCol].isMine) {
+                                        count++;
+                                    }
+                                }
+                            }
+                        }
+                        grid[row][col].adjacentMines = count;
+                    }
+                }
+            }
+        }
+        
+        /**
+         * Render the visual grid in the DOM
+         * Creates clickable cells and attaches event listeners for touch and mouse
+         */
+        function renderGrid() {
+            const gridElement = document.getElementById('game-grid');
+            gridElement.innerHTML = '';
+            
+            for (let row = 0; row < GRID_SIZE; row++) {
+                for (let col = 0; col < GRID_SIZE; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    
+                    // Mouse events (fallback for non-touch devices or for simultaneous support)
+                    cell.addEventListener('click', (e) => handleCellClick(e, row, col));
+                    cell.addEventListener('contextmenu', (e) => handleRightClick(e, row, col));
+
+                    // Touch events for mobile
+                    let touchStartTime;
+                    cell.addEventListener('touchstart', (e) => {
+                        initializeAudioContext(); // Initialize audio context on first touch
+                        e.preventDefault(); // Prevent default browser behavior (e.g., scrolling, context menu)
+                        touchStartTime = Date.now();
+                        longPressTimer = setTimeout(() => {
+                            // This is a long press
+                            handleLongPress(e, row, col);
+                            longPressTimer = null; // Clear timer after it fires
+                        }, LONG_PRESS_THRESHOLD);
+                        cell.classList.add('long-pressing'); // Visual feedback for long press
+                    });
+
+                    cell.addEventListener('touchend', (e) => {
+                        e.preventDefault();
+                        cell.classList.remove('long-pressing');
+                        if (longPressTimer) {
+                            clearTimeout(longPressTimer);
+                            longPressTimer = null;
+                            // If touch duration was less than threshold, it's a tap
+                            if (Date.now() - touchStartTime < LONG_PRESS_THRESHOLD) {
+                                handleCellTap(e, row, col);
+                            }
+                        }
+                    });
+
+                    cell.addEventListener('touchmove', (e) => {
+                        // If finger moves significantly, cancel long press
+                        if (longPressTimer) {
+                            clearTimeout(longPressTimer);
+                            longPressTimer = null;
+                            cell.classList.remove('long-pressing');
+                        }
+                    });
+                    
+                    gridElement.appendChild(cell);
+                }
+            }
+        }
+        
+        /**
+         * Handles tap (short touch) on a cell. Equivalent to left-click.
+         */
+        function handleCellTap(event, row, col) {
+            // Check if game is over or cell is flagged
+            if (gameState !== 'playing' || grid[row][col].isFlagged) {
+                return;
+            }
+            
+            // Start timer on first interaction
+            if (firstClick) {
+                startTimer();
+                firstClick = false;
+            }
+            
+            const cellData = grid[row][col];
+            
+            // Don't reveal already revealed cells
+            if (cellData.isRevealed) {
+                return;
+            }
+            
+            // Check if clicked on mine
+            if (cellData.isMine) {
+                gameOver();
+                return;
+            }
+            
+            // Reveal the cell
+            revealCell(row, col);
+            
+            // If cell has no adjacent mines, flood fill
+            if (cellData.adjacentMines === 0) {
+                floodFill(row, col);
+            }
+            
+            // Check for victory condition
+            checkVictory();
+        }
+
+        /**
+         * Handle long press on a cell. Equivalent to right-click (flag toggle).
+         */
+        function handleLongPress(event, row, col) {
+            // Ignore if game is over or cell is revealed
+            if (gameState !== 'playing' || grid[row][col].isRevealed) {
+                return;
+            }
+            
+            const cellData = grid[row][col];
+            const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            
+            // Toggle flag state
+            if (cellData.isFlagged) {
+                cellData.isFlagged = false;
+                cellElement.classList.remove('flagged');
+                cellElement.textContent = '';
+                flagCount--;
+                playTone(440, 0.1, 'triangle'); // Audio feedback for flag removal
+            } else {
+                cellData.isFlagged = true;
+                cellElement.classList.add('flagged');
+                cellElement.textContent = '⚑'; // Flag symbol
+                flagCount++;
+                playTone(880, 0.1, 'square'); // Audio feedback for flag placement
+            }
+            
+            // Update flag counter display
+            document.getElementById('flag-count').textContent = flagCount;
+            triggerJoltEffect(); // Simulated haptic feedback
+        }
+
+        /**
+         * Handle left-click on a cell (for desktop/mouse users)
+         * Main game interaction: reveal cells or trigger game over
+         */
+        function handleCellClick(event, row, col) {
+            event.preventDefault(); // Prevent context menu on right click (though handled by touch events for mobile)
+            
+            // Ignore clicks if game is over or cell is flagged
+            if (gameState !== 'playing' || grid[row][col].isFlagged) {
+                return;
+            }
+            
+            // Start timer on first interaction
+            if (firstClick) {
+                startTimer();
+                firstClick = false;
+                initializeAudioContext(); // Initialize audio context on first click
+            }
+            
+            const cellData = grid[row][col];
+            
+            // Don't reveal already revealed cells
+            if (cellData.isRevealed) {
+                return;
+            }
+            
+            // Check if clicked on mine
+            if (cellData.isMine) {
+                gameOver();
+                return;
+            }
+            
+            // Reveal the cell
+            revealCell(row, col);
+            
+            // If cell has no adjacent mines, flood fill
+            if (cellData.adjacentMines === 0) {
+                floodFill(row, col);
+            }
+            
+            // Check for victory condition
+            checkVictory();
+        }
+        
+        /**
+         * Handle right-click on a cell (for desktop/mouse users)
+         * Toggle flag state for marking suspected mines
+         */
+        function handleRightClick(event, row, col) {
+            event.preventDefault(); // Prevent default browser context menu
+            
+            // Ignore if game is over or cell is revealed
+            if (gameState !== 'playing' || grid[row][col].isRevealed) {
+                return;
+            }
+            
+            const cellData = grid[row][col];
+            const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            
+            // Toggle flag state
+            if (cellData.isFlagged) {
+                cellData.isFlagged = false;
+                cellElement.classList.remove('flagged');
+                cellElement.textContent = '';
+                flagCount--;
+                playTone(440, 0.1, 'triangle'); // Audio feedback for flag removal
+            } else {
+                cellData.isFlagged = true;
+                cellElement.classList.add('flagged');
+                cellElement.textContent = '⚑'; // Flag symbol
+                flagCount++;
+                playTone(880, 0.1, 'square'); // Audio feedback for flag placement
+            }
+            
+            // Update flag counter display
+            document.getElementById('flag-count').textContent = flagCount;
+            triggerJoltEffect(); // Simulated haptic feedback
+        }
+        
+        /**
+         * Reveal a single cell and update its visual representation
+         */
+        function revealCell(row, col) {
+            const cellData = grid[row][col];
+            const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            
+            if (cellData.isRevealed || cellData.isFlagged) {
+                return;
+            }
+            
+            cellData.isRevealed = true;
+            revealedCount++;
+            cellElement.classList.add('revealed'); // Triggers the cell reveal animation
+            playTone(220 + (cellData.adjacentMines * 50), 0.05, 'sine'); // Varies pitch based on mine count
+
+            // Display number if there are adjacent mines
+            if (cellData.adjacentMines > 0) {
+                cellElement.textContent = cellData.adjacentMines;
+                cellElement.classList.add(`number-${cellData.adjacentMines}`);
+            }
+            // Clear content if it was a flagged cell that's now revealed (shouldn't happen with logic but for safety)
+            if (cellData.isFlagged) {
+                cellElement.textContent = '';
+            }
+        }
+        
+        /**
+         * Flood fill algorithm for revealing empty areas
+         * Recursively reveals connected cells with no adjacent mines
+         */
+        function floodFill(startRow, startCol) {
+            const stack = [[startRow, startCol]];
+            
+            while (stack.length > 0) {
+                const [row, col] = stack.pop();
+                
+                // Check all 8 adjacent cells
+                for (let i = -1; i <= 1; i++) {
+                    for (let j = -1; j <= 1; j++) {
+                        const newRow = row + i;
+                        const newCol = col + j;
+                        
+                        // Skip center cell and check bounds
+                        if (i === 0 && j === 0) continue;
+                        if (newRow < 0 || newRow >= GRID_SIZE || 
+                            newCol < 0 || newCol >= GRID_SIZE) continue;
+                        
+                        const adjacentCell = grid[newRow][newCol];
+                        
+                        // Only reveal unrevealed, unflagged, non-mine cells
+                        if (!adjacentCell.isRevealed && 
+                            !adjacentCell.isFlagged && 
+                            !adjacentCell.isMine) {
+                            
+                            revealCell(newRow, newCol); // This now includes the animation trigger
+                            
+                            // Continue flood fill if this cell also has no adjacent mines
+                            if (adjacentCell.adjacentMines === 0) {
+                                stack.push([newRow, newCol]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        /**
+         * Handle game over state when mine is clicked
+         * Reveals all mines and shows defeat message
+         */
+        function gameOver() {
+            gameState = 'lost';
+            stopTimer();
+            
+            playTone(80, 0.5, 'sawtooth'); // Deep, ominous tone for game over
+            triggerJoltEffect(); // Stronger jolt for loss
+            
+            // Add flash effect to screen
+            const body = document.body;
+            body.classList.add('flash-effect');
+            setTimeout(() => body.classList.remove('flash-effect'), 500);
+            
+            // Reveal all mines
+            for (let row = 0; row < GRID_SIZE; row++) {
+                for (let col = 0; col < GRID_SIZE; col++) {
+                    if (grid[row][col].isMine) {
+                        const cellElement = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                        cellElement.classList.add('mine', 'revealed');
+                        cellElement.textContent = '🔮'; // Oracle's Crystal Ball for mines
+                    }
+                }
+            }
+            
+            // Show defeat message
+            setTimeout(() => {
+                showMessage('Veil Descended!<br>The Oracle\'s secrets remain hidden...', 'defeat');
+            }, 1000);
+        }
+        
+        /**
+         * Check if victory condition is met
+         * Victory occurs when all non-mine cells are revealed
+         */
+        function checkVictory() {
+            const totalCells = GRID_SIZE * GRID_SIZE;
+            const nonMineCells = totalCells - MINE_COUNT;
+            
+            if (revealedCount === nonMineCells) {
+                gameState = 'won';
+                stopTimer();
+                playTone(1000, 0.3, 'sine'); // High, clear tone for victory
+                triggerJoltEffect(); // Gentle jolt for win
+                showMessage('Insight Achieved!<br>The Oracle\'s wisdom is yours...', 'victory');
+            }
+        }
+        
+        /**
+         * Display game end message
+         */
+        function showMessage(text, type) {
+            // Remove any existing messages first
+            const existingMessages = document.querySelectorAll('.message');
+            existingMessages.forEach(msg => msg.remove());
+
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+            message.innerHTML = text;
+            document.body.appendChild(message);
+            
+            // Auto-remove message after 3 seconds
+            setTimeout(() => {
+                if (message.parentNode) {
+                    message.parentNode.removeChild(message);
+                }
+            }, 3000);
+        }
+        
+        /**
+         * Start the game timer
+         */
+        function startTimer() {
+            startTime = Date.now();
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+        
+        /**
+         * Stop the game timer
+         */
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+        
+        /**
+         * Update timer display
+         */
+        function updateTimer() {
+            if (startTime) {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const seconds = (elapsed % 60).toString().padStart(2, '0');
+                document.getElementById('timer').textContent = `${minutes}:${seconds}`;
+            }
+        }
+        
+        /**
+         * Reset the game to initial state
+         * Clears board and initializes new game
+         */
+        function resetGame() {
+            // Reset game state
+            gameState = 'playing';
+            firstClick = true;
+            flagCount = 0;
+            revealedCount = 0;
+            
+            // Stop and reset timer
+            stopTimer();
+            startTime = null;
+            document.getElementById('timer').textContent = '00:00';
+            document.getElementById('flag-count').textContent = '0';
+            
+            // Remove any existing messages
+            const existingMessages = document.querySelectorAll('.message');
+            existingMessages.forEach(msg => msg.remove());
+            
+            // Initialize new game
+            initializeGrid();
+            placeMines();
+            calculateAdjacentMines();
+            renderGrid();
+        }
+        
+        // Initialize the game on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            resetGame();
+        });
+        
+        // Prevent default context menu on right-click for the entire document,
+        // specifically to prevent it interfering with long-press for flagging.
+        document.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+
+        // Ensure audio context is resumed on any initial user interaction
+        document.addEventListener('click', initializeAudioContext, { once: true });
+        document.addEventListener('touchstart', initializeAudioContext, { once: true });
+    </script>
+</body>
+</html>
